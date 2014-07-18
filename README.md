@@ -46,7 +46,7 @@ irb(2.1.1): writer.write("abc")
 irb(2.1.1): writer.write(123456789012345678901234567890)
 ==========> nil
 irb(2.1.1): io.string
-==========> "{\"~#'\":\"abc\"}\n{\"~#'\":\"~n123456789012345678901234567890\"}\n"
+==========> "[\"~#'\",\"abc\"]\n[\"~#'\",\"~n123456789012345678901234567890\"]\n"
 irb(2.1.1): reader = Transit::Reader.new(:json, StringIO.new(io.string))
 ==========> #<Transit::Reader:0x007faab2db48e0 @reader=#<Transit::JsonUnmarshaler:0x007faab2dae030 @..........(snip)..........
 irb(2.1.1): reader.read {|val| puts val}
@@ -78,50 +78,47 @@ abc
 |map|Hash|Hash|`{a: 1, b: 2, c: 3}`|`{:a=>1, :b=>2, :c=>3}`|
 |bytes|Transit::ByteArray|Transit::ByteArray|Transit::ByteArray.new("base64")|base64|
 |link|Transit::Link|Transit::Link|Transit::Link.new(Addressable::URI.parse("http://example.org/search"), "search")|`#<Transit::Link:0x007f81c405b7f0 @values={"href"=>#<Addressable::URI:0x3fc0e202dfb8 URI:http://example.org/search>, "rel"=>"search", "name"=>nil, "render"=>nil, "prompt"=>nil}>`|
-|tagged value|Transit::TaggedValue|Transit::TaggedValue|TaggedValue.new("unrecognized",:value)|`#<Transit::TaggedValue:0x007f81c405ac10 @tag="unrecognized", @rep=:value>`|
 
 ## Custom Handlers
 
 ### Custom Write Handlers
 
-Implement `tag`, `rep(arg)` and `string_rep(arg)` methods. For example:
+Implement `tag`, `rep(obj)` and `string_rep(obj)` methods. For example:
 
 ```ruby
 PhoneNumber = Struct.new(:area, :prefix, :suffix)
 
-class PhoneNumberHandler
+class PhoneNumberWriteHandler
   def tag(_) "P" end
-  def rep(p) "#{p.area}.#{p.prefix}.#{p.suffix}" end
-  def string_rep(p) rep(p) end
+  def rep(o) "#{o.area}.#{o.prefix}.#{o.suffix}" end
+  def string_rep(o) rep(o) end
 end
 ```
 
 ### Custom Read Handlers
 
-Implement `from_rep(arg)` method. For example:
+Implement `from_rep(rep)` method. For example:
 
 ```ruby
-def PhoneNumber.parse(p)
-  area, prefix, suffix = p.split(".")
-  PhoneNumber.new(area, prefix, suffix)
-end
-
 class PhoneNumberReadHandler
-  def from_rep(v) PhoneNumber.parse(v) end
+  def from_rep(rep)
+    area, prefix, suffix = rep.split(".").map(&:to_i)
+    PhoneNumber.new(area, prefix, suffix)
+  end
 end
 ```
 
-### Usage example of custom handler
+### Example use
 
 ```ruby
 io = StringIO.new('', 'w+')
 writer = Transit::Writer.new(:json, io,
-                             :handlers => {PhoneNumber => PhoneNumberHandler.new})
-writer.write(PhoneNumber.new("555","867","5309"))
+                             :handlers => {PhoneNumber => PhoneNumberWriteHandler.new})
+writer.write(PhoneNumber.new(555,867,5309))
 
 reader = Transit::Reader.new(:json, StringIO.new(io.string),
                              :handlers  => {"P" => PhoneNumberReadHandler.new})
-puts reader.read.inspect
+p reader.read
 ```
 
 ## Supported Rubies
